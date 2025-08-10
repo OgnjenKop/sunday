@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/location_manager.dart';
 import '../services/uv_service.dart';
 import '../services/vitamin_d_calculator.dart';
-// import '../services/health_manager.dart';
+import '../services/health_manager.dart';
 import '../services/network_monitor.dart';
 import 'clothing_picker.dart';
 import 'sunscreen_picker.dart';
@@ -23,9 +23,10 @@ class ContentView extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => VitaminDCalculator(
             context.read<UVService>(),
+            context.read<HealthManager>(),
           ),
         ),
-        // ChangeNotifierProvider(create: (_) => HealthManager()),
+        ChangeNotifierProvider(create: (_) => HealthManager()),
         ChangeNotifierProvider(create: (_) => NetworkMonitor()),
       ],
       child: const MainView(),
@@ -46,7 +47,7 @@ class _MainViewState extends State<MainView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LocationManager>().requestPermission();
-      // context.read<HealthManager>().requestAuthorization();
+      context.read<HealthManager>().requestAuthorization();
     });
   }
 

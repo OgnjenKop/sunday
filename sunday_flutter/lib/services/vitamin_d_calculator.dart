@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'uv_service.dart';
-// import 'health_manager.dart';
+import 'health_manager.dart';
 
 enum ClothingLevel { none, minimal, light, moderate, heavy }
 enum SunscreenLevel { none, spf15, spf30, spf50, spf100 }
@@ -21,24 +21,24 @@ class VitaminDCalculator extends ChangeNotifier {
   Timer? _timer;
   double _lastUV = 0.0;
   final UVService _uvService;
-  // final HealthManager _healthManager;
+  final HealthManager _healthManager;
 
-  VitaminDCalculator(this._uvService) {
+  VitaminDCalculator(this._uvService, this._healthManager) {
     _loadUserPreferences();
     _uvService.addListener(_onUVServiceChange);
-    // _healthManager.addListener(_onHealthManagerChange);
+    _healthManager.addListener(_onHealthManagerChange);
   }
 
   void _onUVServiceChange() {
     updateUV(_uvService.currentUV);
   }
 
-  // void _onHealthManagerChange() {
-  //   _healthManager.getAge().then((age) {
-  //     userAge = age;
-  //     updateVitaminDRate(uvIndex: _lastUV);
-  //   });
-  // }
+  void _onHealthManagerChange() {
+    _healthManager.getAge().then((age) {
+      userAge = age;
+      updateVitaminDRate(uvIndex: _lastUV);
+    });
+  }
 
   void _loadUserPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -166,7 +166,7 @@ class VitaminDCalculator extends ChangeNotifier {
   @override
   void dispose() {
     _uvService.removeListener(_onUVServiceChange);
-    // _healthManager.removeListener(_onHealthManagerChange);
+    _healthManager.removeListener(_onHealthManagerChange);
     _timer?.cancel();
     super.dispose();
   }

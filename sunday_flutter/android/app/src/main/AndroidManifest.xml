@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for Health Connect -->
+    <uses-permission android:name="android.permission.health.READ_VITAMIN_D"/>
+    <uses-permission android:name="android.permission.health.WRITE_VITAMIN_D"/>
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT_PERCENTAGE"/>
+    <uses-permission android:name="android.permission.health.READ_DATE_OF_BIRTH"/>
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
     <application
         android:label="sunday_flutter"
         android:name="${applicationName}"
@@ -30,6 +37,17 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Health Connect -->
+        <activity
+            android:name="androidx.health.connect.client.permission.HealthConnectPermissionDelegate"
+            android:exported="true"
+            android:permission="android.permission.BIND_HEALTH_CONNECT_PERMISSION_DELEGATE"
+            >
+            <intent-filter>
+                <action android:name="androidx.health.connect.client.permission.ACTION_REQUEST_PERMISSIONS" />
+            </intent-filter>
+        </activity>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -40,6 +58,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Health Connect -->
+        <intent>
+            <action android:name="androidx.health.connect.client.HealthConnectClient.ACTION_BIND_SERVICE" />
         </intent>
     </queries>
 </manifest>
