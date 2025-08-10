@@ -87,3 +87,13 @@ targets:
           enabled: true
           groups:
             - group.sunday.widget
+
+  SundayTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/SundayTests
+    info:
+      path: Tests/Info.plist
+    dependencies:
+      - target: Sunday
