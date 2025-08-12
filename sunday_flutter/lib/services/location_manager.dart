@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
@@ -8,6 +9,8 @@ class LocationManager extends ChangeNotifier {
   bool isUpdatingLocation = false;
   bool locationServicesEnabled = true;
   String locationName = '';
+  Stream<Position>? _positionStream;
+  StreamSubscription<Position>? _positionSub;
 
   Future<void> requestPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
@@ -36,9 +39,7 @@ class LocationManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      location = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      );
+      location = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
       await _updatePlacemark();
     } catch (e) {
       print(e);
@@ -46,6 +47,25 @@ class LocationManager extends ChangeNotifier {
       isUpdatingLocation = false;
       notifyListeners();
     }
+  }
+
+  Future<void> startSignificantLocationChanges({double distanceFilterMeters = 500}) async {
+    await _positionSub?.cancel();
+    final locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.low,
+      distanceFilter: distanceFilterMeters.toInt(),
+    );
+    _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings);
+    _positionSub = _positionStream!.listen((pos) async {
+      location = pos;
+      await _updatePlacemark();
+      notifyListeners();
+    });
+  }
+
+  Future<void> stopUpdatingLocation() async {
+    await _positionSub?.cancel();
+    _positionSub = null;
   }
 
   Future<void> _updatePlacemark() async {

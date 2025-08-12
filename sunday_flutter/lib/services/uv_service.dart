@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:home_widget/home_widget.dart';
+import 'notification_service.dart';
 import '../models/data_models.dart';
 
 class UVService extends ChangeNotifier {
@@ -23,6 +24,17 @@ class UVService extends ChangeNotifier {
   bool isOfflineMode = false;
   DateTime? lastSuccessfulUpdate;
   bool hasNoData = false;
+  
+  bool get shouldShowTomorrowTimes {
+    if (todaySunset == null) return false;
+    final now = DateTime.now();
+    final isToday = now.year == todaySunset!.year && now.month == todaySunset!.month && now.day == todaySunset!.day;
+    return isToday && now.isAfter(todaySunset!);
+  }
+
+  DateTime? get displaySunrise => shouldShowTomorrowTimes ? tomorrowSunrise : todaySunrise;
+  DateTime? get displaySunset => shouldShowTomorrowTimes ? tomorrowSunset : todaySunset;
+  double get displayMaxUV => shouldShowTomorrowTimes ? tomorrowMaxUV : maxUV;
 
   Future<void> fetchUVData(Position location) async {
     isLoading = true;
@@ -46,6 +58,7 @@ class UVService extends ChangeNotifier {
         final data = jsonDecode(response.body);
         _processUVData(data);
         _cacheUVData(data, location);
+        _scheduleSunNotifications();
         isOfflineMode = false;
         hasNoData = false;
         lastSuccessfulUpdate = DateTime.now();
@@ -99,6 +112,42 @@ class UVService extends ChangeNotifier {
     }
     _calculateSafeExposureTimes();
     HomeWidget.saveWidgetData('uvIndex', currentUV.toStringAsFixed(1));
+    // Trigger widget update after saving data
+    // (non-blocking; errors ignored intentionally)
+    HomeWidget.updateWidget(name: 'HomeWidgetProvider');
+  }
+
+  void _scheduleSunNotifications() {
+    // avoid duplicate scheduling per day by a simple in-memory check
+    final now = DateTime.now();
+    final sunrise = todaySunrise;
+    final sunset = todaySunset;
+    if (sunrise == null || sunset == null) return;
+    final solarNoon = DateTime.fromMillisecondsSinceEpoch(
+        sunrise.millisecondsSinceEpoch +
+            ((sunset.millisecondsSinceEpoch - sunrise.millisecondsSinceEpoch) ~/ 2));
+    final preNoon = solarNoon.subtract(const Duration(minutes: 30));
+
+    // Cancel previous IDs for today and reschedule
+    NotificationService().cancelIds(['sunrise', 'sunset', 'solarNoon']);
+    NotificationService().scheduleAt(
+      id: 'sunrise',
+      title: 'The sun is up!',
+      body: 'Today\'s max UV: ${displayMaxUV.toStringAsFixed(1)}',
+      when: sunrise,
+    );
+    NotificationService().scheduleAt(
+      id: 'sunset',
+      title: 'The sun is setting',
+      body: 'Check your vitamin D progress in Sun Day',
+      when: sunset,
+    );
+    NotificationService().scheduleAt(
+      id: 'solarNoon',
+      title: 'Solar noon approaching',
+      body: 'Peak UV in 30 minutes (UV ${displayMaxUV.toStringAsFixed(1)})',
+      when: preNoon.isAfter(now) ? preNoon : now.add(const Duration(minutes: 1)),
+    );
   }
 
   void _calculateSafeExposureTimes() {

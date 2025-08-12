@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../services/location_manager.dart';
 import '../services/uv_service.dart';
@@ -19,15 +20,15 @@ class ContentView extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LocationManager()),
+        ChangeNotifierProvider(create: (_) => HealthManager()),
         ChangeNotifierProvider(create: (_) => UVService()),
+        ChangeNotifierProvider(create: (_) => NetworkMonitor()),
         ChangeNotifierProvider(
           create: (context) => VitaminDCalculator(
             context.read<UVService>(),
             context.read<HealthManager>(),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => HealthManager()),
-        ChangeNotifierProvider(create: (_) => NetworkMonitor()),
       ],
       child: const MainView(),
     );
@@ -42,12 +43,22 @@ class MainView extends StatefulWidget {
 }
 
 class _MainViewState extends State<MainView> {
+  Timer? _uvTimer;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LocationManager>().requestPermission();
       context.read<HealthManager>().requestAuthorization();
+      // Schedule periodic UV updates (5 minutes) while app is in foreground
+      _uvTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+        final location = context.read<LocationManager>().location;
+        if (location != null) {
+          context.read<UVService>().fetchUVData(location);
+          // Switch to significant location changes for efficiency
+          context.read<LocationManager>().startSignificantLocationChanges();
+        }
+      });
     });
   }
 
@@ -80,6 +91,12 @@ class _MainViewState extends State<MainView> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _uvTimer?.cancel();
+    super.dispose();
   }
 
   Widget _buildContentView(BuildContext context) {
@@ -149,11 +166,15 @@ class _MainViewState extends State<MainView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildUvInfo('MAX UVI', uvService.maxUV.toStringAsFixed(1)),
-              _buildUvInfo('SUNRISE', _formatTime(uvService.todaySunrise)),
-              _buildUvInfo('SUNSET', _formatTime(uvService.todaySunset)),
+              _buildUvInfo(
+                  uvService.shouldShowTomorrowTimes ? 'MAX TMRW' : 'MAX UVI',
+                  uvService.displayMaxUV.toStringAsFixed(1)),
+              _buildUvInfo('SUNRISE', _formatTime(uvService.displaySunrise)),
+              _buildUvInfo('SUNSET', _formatTime(uvService.displaySunset)),
             ],
           ),
+          const SizedBox(height: 10),
+          _buildBurnLimitRow(context),
           const SizedBox(height: 10),
           if (locationManager.locationName.isNotEmpty)
             Text(
@@ -205,6 +226,28 @@ class _MainViewState extends State<MainView> {
           _buildVitaminDInfo('SESSION', '${vitaminDCalculator.sessionVitaminD.toStringAsFixed(0)} IU'),
           // _buildVitaminDInfo('TODAY', '0 IU'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBurnLimitRow(BuildContext context) {
+    final uvService = context.watch<UVService>();
+    final vitaminDCalculator = context.watch<VitaminDCalculator>();
+    final skinTypeIndex = vitaminDCalculator.skinType.index + 1; // 1-6
+    final minutes = uvService.burnTimeMinutes[skinTypeIndex] ?? 60;
+    final label = minutes < 60
+        ? '$minutes min'
+        : '${minutes ~/ 60}h ${minutes % 60 == 0 ? '' : '${minutes % 60}m'}'.trim();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        'BURN LIMIT: $label',
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.white70,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -275,7 +318,7 @@ class _MainViewState extends State<MainView> {
               context: context,
               builder: (_) => ClothingPicker(
                 onSelectionChanged: (level) {
-                  vitaminDCalculator.clothingLevel = level;
+                  vitaminDCalculator.setClothingLevel(level);
                 },
               ),
             );
@@ -288,7 +331,7 @@ class _MainViewState extends State<MainView> {
               context: context,
               builder: (_) => SunscreenPicker(
                 onSelectionChanged: (level) {
-                  vitaminDCalculator.sunscreenLevel = level;
+                  vitaminDCalculator.setSunscreenLevel(level);
                 },
               ),
             );
@@ -301,7 +344,7 @@ class _MainViewState extends State<MainView> {
               context: context,
               builder: (_) => SkinTypePicker(
                 onSelectionChanged: (type) {
-                  vitaminDCalculator.skinType = type;
+                  vitaminDCalculator.setSkinType(type);
                 },
               ),
             );

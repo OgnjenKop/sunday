@@ -16,7 +16,7 @@ class SundayWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            'UV Index',
+            'Sun Day',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -26,16 +26,44 @@ class SundayWidget extends StatelessWidget {
           FutureBuilder<String?>(
             future: HomeWidget.getWidgetData('uvIndex', defaultValue: '0.0'),
             builder: (context, snapshot) {
+              final uv = snapshot.data ?? '0.0';
               return Text(
-                snapshot.data ?? '0.0',
+                'UV $uv',
                 style: const TextStyle(
-                  fontSize: 48,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               );
             },
           ),
+          const SizedBox(height: 8),
+          FutureBuilder<String?>(
+            future: HomeWidget.getWidgetData('vitaminDRate', defaultValue: '0'),
+            builder: (context, snapshot) {
+              final rate = snapshot.data ?? '0';
+              return Text(
+                '$rate IU/min',
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                ),
+              );
+            },
+          ),
+          FutureBuilder<String?>(
+            future: HomeWidget.getWidgetData('todaysTotal', defaultValue: '0'),
+            builder: (context, snapshot) {
+              final total = snapshot.data ?? '0';
+              return Text(
+                '$total IU today',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
+              );
+            },
+          )
         ],
       ),
     );

@@ -4,17 +4,22 @@
     <uses-permission android:name="android.permission.health.WRITE_VITAMIN_D"/>
     <uses-permission android:name="android.permission.health.READ_BODY_FAT_PERCENTAGE"/>
     <uses-permission android:name="android.permission.health.READ_DATE_OF_BIRTH"/>
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Network + Location -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="sunday_flutter"
+        android:label="Sunday"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -48,6 +53,25 @@
                 <action android:name="androidx.health.connect.client.permission.ACTION_REQUEST_PERMISSIONS" />
             </intent-filter>
         </activity>
+
+        <!-- Home Widget -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

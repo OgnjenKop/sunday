@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'uv_service.dart';
 import 'health_manager.dart';
+import 'package:home_widget/home_widget.dart';
+import 'notification_service.dart';
 
 enum ClothingLevel { none, minimal, light, moderate, heavy }
 enum SunscreenLevel { none, spf15, spf30, spf50, spf100 }
@@ -13,20 +16,30 @@ class VitaminDCalculator extends ChangeNotifier {
   ClothingLevel clothingLevel = ClothingLevel.light;
   SunscreenLevel sunscreenLevel = SunscreenLevel.none;
   SkinType skinType = SkinType.type3;
-  double currentVitaminDRate = 0.0;
-  double sessionVitaminD = 0.0;
+  double currentVitaminDRate = 0.0; // IU/hour
+  double sessionVitaminD = 0.0; // IU
   DateTime? sessionStartTime;
   int? userAge;
+  double cumulativeMedFraction = 0.0;
+  double currentUVQualityFactor = 1.0;
+  double currentAdaptationFactor = 1.0;
 
   Timer? _timer;
   double _lastUV = 0.0;
   final UVService _uvService;
   final HealthManager _healthManager;
+  DateTime? _lastUpdateTime;
+  DateTime? _lastSessionSaveTime;
+
+  static const double _uvHalfMax = 4.0;
+  static const double _uvMaxFactor = 3.0;
 
   VitaminDCalculator(this._uvService, this._healthManager) {
     _loadUserPreferences();
+    _restoreActiveSession();
     _uvService.addListener(_onUVServiceChange);
     _healthManager.addListener(_onHealthManagerChange);
+    _initHealthFactors();
   }
 
   void _onUVServiceChange() {
@@ -34,10 +47,7 @@ class VitaminDCalculator extends ChangeNotifier {
   }
 
   void _onHealthManagerChange() {
-    _healthManager.getAge().then((age) {
-      userAge = age;
-      updateVitaminDRate(uvIndex: _lastUV);
-    });
+    _initHealthFactors();
   }
 
   void _loadUserPreferences() async {
@@ -60,9 +70,12 @@ class VitaminDCalculator extends ChangeNotifier {
     isInSun = true;
     sessionStartTime = DateTime.now();
     sessionVitaminD = 0.0;
+    cumulativeMedFraction = 0.0;
     _lastUV = uvIndex;
+    _lastUpdateTime = DateTime.now();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       updateVitaminD(uvIndex: _lastUV);
+      _updateMedExposure(uvIndex: _lastUV);
     });
     updateVitaminDRate(uvIndex: uvIndex);
     notifyListeners();
@@ -74,6 +87,8 @@ class VitaminDCalculator extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     sessionStartTime = null;
+    cumulativeMedFraction = 0.0;
+    _saveActiveSession();
     notifyListeners();
   }
 
@@ -83,21 +98,35 @@ class VitaminDCalculator extends ChangeNotifier {
   }
 
   void updateVitaminDRate({required double uvIndex}) {
-    const baseRate = 21000.0;
-    final uvFactor = (uvIndex * 3.0) / (4.0 + uvIndex);
+    const baseRate = 21000.0; // IU/hour baseline for Type 3 minimal clothing
+    final uvFactor = (uvIndex * _uvMaxFactor) / (_uvHalfMax + uvIndex);
     final exposureFactor = _getExposureFactor();
     final sunscreenFactor = _getSunscreenFactor();
     final skinFactor = _getSkinFactor();
     final ageFactor = _getAgeFactor();
-
-    currentVitaminDRate = baseRate * uvFactor * exposureFactor * sunscreenFactor * skinFactor * ageFactor;
+    _updateUVQualityFactor();
+    currentVitaminDRate = baseRate * uvFactor * exposureFactor * sunscreenFactor * skinFactor * ageFactor * currentUVQualityFactor * currentAdaptationFactor;
     notifyListeners();
+    // Update widget with current rate
+    HomeWidget.saveWidgetData('vitaminDRate', (currentVitaminDRate / 60.0).toStringAsFixed(0)); // IU/min
+    HomeWidget.updateWidget(name: 'HomeWidgetProvider');
   }
 
   void updateVitaminD({required double uvIndex}) {
     if (!isInSun) return;
     updateVitaminDRate(uvIndex: uvIndex);
-    sessionVitaminD += currentVitaminDRate / 3600.0;
+    final now = DateTime.now();
+    final elapsedSec = _lastUpdateTime == null ? 1.0 : now.difference(_lastUpdateTime!).inMilliseconds / 1000.0;
+    _lastUpdateTime = now;
+    sessionVitaminD += currentVitaminDRate * (elapsedSec / 3600.0);
+    // Update widget's today total by combining with Health if available (approx)
+    // We only write session value; a foreground health query would be needed for exact total.
+    HomeWidget.saveWidgetData('todaysTotal', sessionVitaminD.toStringAsFixed(0));
+    HomeWidget.updateWidget(name: 'HomeWidgetProvider');
+    if (_lastSessionSaveTime == null || now.difference(_lastSessionSaveTime!).inSeconds >= 10) {
+      _saveActiveSession();
+      _lastSessionSaveTime = now;
+    }
     notifyListeners();
   }
 
@@ -160,9 +189,145 @@ class VitaminDCalculator extends ChangeNotifier {
     if (userAge == null) return 1.0;
     if (userAge! <= 20) return 1.0;
     if (userAge! >= 70) return 0.25;
-    return 1.0 - (userAge! - 20) * 0.015;
+    return max(0.25, 1.0 - (userAge! - 20) * 0.01);
   }
 
+  void _updateUVQualityFactor() {
+    final sunrise = _uvService.todaySunrise;
+    final sunset = _uvService.todaySunset;
+    if (sunrise == null || sunset == null) {
+      currentUVQualityFactor = 1.0;
+      return;
+    }
+    final solarNoonMs = sunrise.millisecondsSinceEpoch + ((sunset.millisecondsSinceEpoch - sunrise.millisecondsSinceEpoch) / 2).round();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final hoursFromNoon = (nowMs - solarNoonMs).abs() / (1000 * 60 * 60);
+    final quality = exp(-hoursFromNoon * 0.2);
+    currentUVQualityFactor = quality.clamp(0.1, 1.0);
+  }
+
+  void _updateMedExposure({required double uvIndex}) {
+    if (!isInSun || uvIndex <= 0) return;
+    const medTimesAtUV1 = {
+      1: 150.0,
+      2: 250.0,
+      3: 425.0,
+      4: 600.0,
+      5: 850.0,
+      6: 1100.0,
+    };
+    final skinIndex = skinType.index + 1;
+    final baseMed = medTimesAtUV1[skinIndex] ?? 425.0;
+    final uvToUse = max(uvIndex, 0.1);
+    final fullMedMinutes = baseMed / uvToUse;
+    final medPerSecond = 1.0 / (fullMedMinutes * 60.0);
+    final before = cumulativeMedFraction;
+    cumulativeMedFraction += medPerSecond;
+    if (before < 0.8 && cumulativeMedFraction >= 0.8) {
+      NotificationService().showInstant(
+        id: 'burnWarning',
+        title: 'Approaching burn threshold',
+        body: 'You\'ve reached 80% of MED for your skin type.',
+      );
+    }
+  }
+
+  Future<void> _saveActiveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!isInSun) {
+      await prefs.remove('activeSessionStartTime');
+      await prefs.remove('activeSessionVitaminD');
+      await prefs.remove('activeSessionMED');
+      await prefs.remove('activeSessionLastUV');
+      await prefs.remove('activeSessionLastUpdate');
+      return;
+    }
+    if (sessionStartTime != null) {
+      await prefs.setString('activeSessionStartTime', sessionStartTime!.toIso8601String());
+    }
+    await prefs.setDouble('activeSessionVitaminD', sessionVitaminD);
+    await prefs.setDouble('activeSessionMED', cumulativeMedFraction);
+    await prefs.setDouble('activeSessionLastUV', _lastUV);
+    if (_lastUpdateTime != null) {
+      await prefs.setString('activeSessionLastUpdate', _lastUpdateTime!.toIso8601String());
+    }
+  }
+
+  Future<void> _restoreActiveSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final startIso = prefs.getString('activeSessionStartTime');
+    if (startIso == null) return;
+    final start = DateTime.tryParse(startIso);
+    if (start == null) return;
+    final now = DateTime.now();
+    if (!(start.year == now.year && start.month == now.month && start.day == now.day)) {
+      // Clear old session
+      await prefs.remove('activeSessionStartTime');
+      await prefs.remove('activeSessionVitaminD');
+      await prefs.remove('activeSessionMED');
+      await prefs.remove('activeSessionLastUV');
+      await prefs.remove('activeSessionLastUpdate');
+      return;
+    }
+    sessionStartTime = start;
+    sessionVitaminD = prefs.getDouble('activeSessionVitaminD') ?? 0.0;
+    cumulativeMedFraction = prefs.getDouble('activeSessionMED') ?? 0.0;
+    _lastUV = prefs.getDouble('activeSessionLastUV') ?? 0.0;
+    final lastUpdateIso = prefs.getString('activeSessionLastUpdate');
+    _lastUpdateTime = lastUpdateIso != null ? DateTime.tryParse(lastUpdateIso) : null;
+    isInSun = true;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      updateVitaminD(uvIndex: _lastUV);
+      _updateMedExposure(uvIndex: _lastUV);
+    });
+    notifyListeners();
+  }
+
+  Future<void> _initHealthFactors() async {
+    final age = await _healthManager.getAge();
+    userAge = age;
+    final history = await _healthManager.getVitaminDHistory(7);
+    if (history.isNotEmpty) {
+      final total = history.values.fold<double>(0.0, (a, b) => a + b);
+      final avg = total / 7.0;
+      if (avg < 1000) {
+        currentAdaptationFactor = 0.8;
+      } else if (avg >= 10000) {
+        currentAdaptationFactor = 1.2;
+      } else {
+        currentAdaptationFactor = 0.8 + (avg - 1000) / 9000 * 0.4;
+      }
+    } else {
+      currentAdaptationFactor = 1.0;
+    }
+    updateVitaminDRate(uvIndex: _lastUV);
+  }
+
+  // Optional setters to persist preferences and recalc
+  Future<void> setClothingLevel(ClothingLevel level) async {
+    clothingLevel = level;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('clothingLevel', level.index);
+    updateVitaminDRate(uvIndex: _lastUV);
+    notifyListeners();
+  }
+
+  Future<void> setSunscreenLevel(SunscreenLevel level) async {
+    sunscreenLevel = level;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('sunscreenLevel', level.index);
+    updateVitaminDRate(uvIndex: _lastUV);
+    notifyListeners();
+  }
+
+  Future<void> setSkinType(SkinType type) async {
+    skinType = type;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('skinType', type.index);
+    updateVitaminDRate(uvIndex: _lastUV);
+    notifyListeners();
+  }
   @override
   void dispose() {
     _uvService.removeListener(_onUVServiceChange);

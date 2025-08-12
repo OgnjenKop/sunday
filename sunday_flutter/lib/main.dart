@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
+import 'services/notification_service.dart';
 import 'views/content_view.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   HomeWidget.registerInteractivityCallback(backgroundCallback);
+  NotificationService().initialize();
   runApp(const SundayApp());
 }
 

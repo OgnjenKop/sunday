@@ -89,4 +89,27 @@ class HealthManager extends ChangeNotifier {
     }
     return null;
   }
+
+  Future<Map<DateTime, double>> getVitaminDHistory(int days) async {
+    if (!isAuthorized) {
+      await requestAuthorization();
+      if (!isAuthorized) return {};
+    }
+
+    final now = DateTime.now();
+    final startDate = now.subtract(Duration(days: days));
+    final types = [HealthDataType.DIETARY_VITAMIN_D];
+    final data = await _health.getHealthDataFromTypes(startDate, now, types);
+
+    final Map<DateTime, double> dailyTotals = {};
+    for (final d in data) {
+      if (d.type == HealthDataType.DIETARY_VITAMIN_D) {
+        final value = (d.value as NumericHealthValue).numericValue.toDouble();
+        final iu = value * 40.0; // micrograms to IU
+        final dayStart = DateTime(d.dateFrom.year, d.dateFrom.month, d.dateFrom.day);
+        dailyTotals.update(dayStart, (prev) => prev + iu, ifAbsent: () => iu);
+      }
+    }
+    return dailyTotals;
+  }
 }
