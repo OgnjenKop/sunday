@@ -1,16 +1,14 @@
-# sunday_flutter
+# Sunday Flutter
 
-A new Flutter project.
+Flutter port of Sun Day. See platform guides:
 
-## Getting Started
+- Android quick start: `README-Android.md`
+- iOS quick start: `README-iOS.md`
 
-This project is a starting point for a Flutter application.
+Make targets (from repo root):
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `make get` — flutter pub get
+- `make analyze` — static analysis
+- `make fmt` — format Dart code
+- `make run DEVICE=<device_id>` — run on a specific device
+- `make apk` — debug APK build

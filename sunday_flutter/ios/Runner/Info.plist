@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sunday Flutter</string>
+	<string>Sun Day</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>sunday_flutter</string>
+	<string>Sun Day</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Sun Day uses your location to fetch local UV index and sunrise/sunset times.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>Sun Day reads your health data to personalize vitamin D calculations.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Sun Day writes vitamin D synthesis estimates to your Health data.</string>
 </dict>
 </plist>

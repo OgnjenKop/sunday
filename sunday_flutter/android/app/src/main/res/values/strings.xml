@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sun Day</string>
+    <string name="channel_name">Sun Day Alerts</string>
+    <string name="channel_desc">Sunrise, sunset, and exposure alerts</string>
+</resources>
+

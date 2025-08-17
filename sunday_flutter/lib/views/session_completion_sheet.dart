@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+enum SessionAction { save, continueTracking, endWithoutSave }
+
 class SessionCompletionSheet extends StatelessWidget {
   final double sessionAmount;
 
@@ -22,23 +24,21 @@ class SessionCompletionSheet extends StatelessWidget {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                // TODO: Save to Health
-                Navigator.pop(context);
+                Navigator.pop(context, SessionAction.save);
               },
               child: const Text('Save to Health'),
             ),
             const SizedBox(height: 20),
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(context, SessionAction.continueTracking);
               },
               child: const Text('Continue Tracking'),
             ),
             const SizedBox(height: 20),
             TextButton(
               onPressed: () {
-                // TODO: End without saving
-                Navigator.pop(context);
+                Navigator.pop(context, SessionAction.endWithoutSave);
               },
               child: const Text("End and Don't Save"),
             ),

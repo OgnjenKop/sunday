@@ -280,16 +280,29 @@ class _MainViewState extends State<MainView> {
       children: [
         Expanded(
           child: ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (vitaminDCalculator.isInSun) {
-                showModalBottomSheet(
+                final action = await showModalBottomSheet<SessionAction>(
                   context: context,
                   builder: (_) => SessionCompletionSheet(
                     sessionAmount: vitaminDCalculator.sessionVitaminD,
                   ),
                 );
+                if (!mounted) return;
+                if (action == SessionAction.save) {
+                  await context.read<HealthManager>().saveVitaminD(
+                        vitaminDCalculator.sessionVitaminD,
+                        DateTime.now(),
+                      );
+                  vitaminDCalculator.stopSession();
+                } else if (action == SessionAction.endWithoutSave) {
+                  vitaminDCalculator.stopSession();
+                } else {
+                  // continueTracking: do nothing
+                }
+              } else {
+                vitaminDCalculator.toggleSunExposure(uvService.currentUV);
               }
-              vitaminDCalculator.toggleSunExposure(uvService.currentUV);
             },
             child: Text(vitaminDCalculator.isInSun ? 'Stop' : 'Start'),
           ),

@@ -1,4 +1,4 @@
-package com.example.sunday_flutter
+package dev.ognjen.sunday
 
 import io.flutter.embedding.android.FlutterActivity
 

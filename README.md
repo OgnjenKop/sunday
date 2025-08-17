@@ -45,3 +45,10 @@ UV tracking and vitamin D calculator for iOS.
 ## License
 
 Public domain. Use however you want.
+
+## Flutter Port
+
+Cross‑platform Flutter implementation lives in `sunday_flutter/`.
+
+- Android quick start: `sunday_flutter/README-Android.md`
+- iOS quick start: `sunday_flutter/README-iOS.md`

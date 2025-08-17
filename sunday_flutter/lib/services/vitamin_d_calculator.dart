@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -334,5 +335,101 @@ class VitaminDCalculator extends ChangeNotifier {
     _healthManager.removeListener(_onHealthManagerChange);
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<double> estimateVitaminDForInterval(
+    DateTime start,
+    DateTime end, {
+    ClothingLevel? clothing,
+    SunscreenLevel? sunscreen,
+    SkinType? skin,
+  }) async {
+    if (!end.isAfter(start)) return 0.0;
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('cachedUVData');
+    List<double>? hourlyUV;
+    DateTime? cacheDate;
+    if (cached != null) {
+      try {
+        final json = jsonDecode(cached) as Map<String, dynamic>;
+        hourlyUV = (json['hourlyUV'] as List).map((e) => (e as num).toDouble()).toList();
+        cacheDate = DateTime.parse(json['date'] as String);
+      } catch (_) {
+        hourlyUV = null;
+      }
+    }
+
+    double uvAt(DateTime t) {
+      if (hourlyUV != null && cacheDate != null &&
+          t.year == cacheDate.year && t.month == cacheDate.month && t.day == cacheDate.day) {
+        final h = t.hour;
+        final m = t.minute;
+        final cur = hourlyUV![h.clamp(0, hourlyUV!.length - 1)];
+        final next = hourlyUV![(h + 1).clamp(0, hourlyUV!.length - 1)];
+        return cur + (next - cur) * (m / 60.0);
+      }
+      return _lastUV; // fallback to last known
+    }
+
+    // Local copies to avoid mutating state
+    final expFactor = () {
+      switch (clothing ?? clothingLevel) {
+        case ClothingLevel.none:
+          return 1.0;
+        case ClothingLevel.minimal:
+          return 0.8;
+        case ClothingLevel.light:
+          return 0.5;
+        case ClothingLevel.moderate:
+          return 0.3;
+        case ClothingLevel.heavy:
+          return 0.1;
+      }
+    }();
+    final sunFactor = () {
+      switch (sunscreen ?? sunscreenLevel) {
+        case SunscreenLevel.none:
+          return 1.0;
+        case SunscreenLevel.spf15:
+          return 0.07;
+        case SunscreenLevel.spf30:
+          return 0.03;
+        case SunscreenLevel.spf50:
+          return 0.02;
+        case SunscreenLevel.spf100:
+          return 0.01;
+      }
+    }();
+    final skinFactor = () {
+      switch (skin ?? skinType) {
+        case SkinType.type1:
+          return 1.25;
+        case SkinType.type2:
+          return 1.1;
+        case SkinType.type3:
+          return 1.0;
+        case SkinType.type4:
+          return 0.7;
+        case SkinType.type5:
+          return 0.4;
+        case SkinType.type6:
+          return 0.2;
+      }
+    }();
+    final ageFactor = _getAgeFactor();
+    final adaptFactor = currentAdaptationFactor;
+
+    double totalIU = 0.0;
+    final totalMinutes = end.difference(start).inMinutes;
+    DateTime cursor = DateTime(start.year, start.month, start.day, start.hour, start.minute);
+    const baseRate = 21000.0;
+    for (int i = 0; i < totalMinutes; i++) {
+      final uv = uvAt(cursor);
+      final uvFactor = (uv * _uvMaxFactor) / (_uvHalfMax + uv);
+      final rate = baseRate * uvFactor * expFactor * sunFactor * skinFactor * ageFactor * adaptFactor;
+      totalIU += rate / 60.0; // per minute contribution
+      cursor = cursor.add(const Duration(minutes: 1));
+    }
+    return totalIU;
   }
 }

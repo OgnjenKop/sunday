@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.sunday_flutter"
+    namespace = "dev.ognjen.sunday"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +20,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.sunday_flutter"
+        // Application ID can be overridden via gradle.properties -> APPLICATION_ID
+        val appId = project.findProperty("APPLICATION_ID") as String?
+        applicationId = appId ?: "com.example.sunday_flutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Health Connect and modern plugins require at least 26
